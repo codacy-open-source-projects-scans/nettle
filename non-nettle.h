@@ -71,13 +71,9 @@ extern const struct nettle_aead nettle_openssl_gcm_aes256;
 
 /* Glue to openssl, for comparative benchmarking. Code in
  * examples/nettle-openssl.c. */
-extern void nettle_openssl_init(void);
 extern const struct nettle_cipher nettle_openssl_aes128;
 extern const struct nettle_cipher nettle_openssl_aes192;
 extern const struct nettle_cipher nettle_openssl_aes256;
-extern const struct nettle_cipher nettle_openssl_blowfish128;
-extern const struct nettle_cipher nettle_openssl_des;
-extern const struct nettle_cipher nettle_openssl_cast128;
 
 extern const struct nettle_hash nettle_openssl_md5;
 extern const struct nettle_hash nettle_openssl_sha1;
