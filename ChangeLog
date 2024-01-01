@@ -1,4 +1,16 @@
+2023-12-27  Niels Möller  <nisse@lysator.liu.se>
+
+	* testsuite/gcm-test.c (test_main): Additional gcm test case, with
+	719 byte message, contributed by Danny Tsen.
+
 2023-12-08  Niels Möller  <nisse@lysator.liu.se>
+
+	Delete all md5 assembly code.
+	* md5.c (nettle_md5_compress): Move function and related macros
+	here, from...
+	* md5-compress.c: ... deleted file.
+	* x86/md5-compress.asm: Deleted file.
+	* x86_64/md5-compress.asm: Deleted file.
 
 	* configure.ac: When checking for openssl, use AC_LINK_IFELSE to
 	check if needed functions really are available. Just using
