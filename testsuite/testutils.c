@@ -864,15 +864,17 @@ test_aead(const struct nettle_aead *aead,
 	      assert (nonce->length == aead->nonce_size);
 	      aead->set_nonce(ctx, nonce->data);
 	    }
-	  if (aead->update && authtext->length)
-	    aead->update(ctx, authtext->length, authtext->data);
-
-	  if (offset > 0)
-	    aead->encrypt(ctx, offset, out + out_align, in + in_align);
-
-	  if (offset < cleartext->length)
-	    aead->encrypt(ctx, cleartext->length - offset,
-			  out + out_align + offset, in + in_align + offset);
+	  if (aead->update)
+	    {
+	      size_t a_offset = (offset <= authtext->length) ? offset : 0;
+	      aead->update(ctx, a_offset, authtext->data);
+	      aead->update(ctx, 0, NULL);
+	      aead->update(ctx, authtext->length - a_offset, authtext->data + a_offset);
+	    }
+	  aead->encrypt(ctx, offset, out + out_align, in + in_align);
+	  aead->encrypt(ctx, 0, out + out_align, NULL);
+	  aead->encrypt(ctx, cleartext->length - offset,
+			out + out_align + offset, in + in_align + offset);
 
 	  if (!MEMEQ(cleartext->length, out + out_align, ciphertext->data))
 	    {
@@ -919,12 +921,10 @@ test_aead(const struct nettle_aead *aead,
 	      if (aead->update && authtext->length)
 		aead->update(ctx, authtext->length, authtext->data);
 
-	      if (offset > 0)
-		aead->decrypt (ctx, offset, out + out_align, out + out_align);
-
-	      if (offset < cleartext->length)
-		aead->decrypt(ctx, cleartext->length - offset,
-			      out + out_align + offset, out + out_align + offset);
+	      aead->decrypt(ctx, offset, out + out_align, out + out_align);
+	      aead->decrypt(ctx, 0, out + out_align, NULL);
+	      aead->decrypt(ctx, cleartext->length - offset,
+			    out + out_align + offset, out + out_align + offset);
 
 	      ASSERT(MEMEQ(cleartext->length, out + out_align, cleartext->data));
 
@@ -1108,16 +1108,22 @@ test_hash(const struct nettle_hash *hash,
     ASSERT (digest->length == hash->digest_size);
 
   hash->init(ctx);
-  hash->update(ctx, msg->length, msg->data);
-  hash->digest(ctx, digest->length, buffer);
-
-  if (MEMEQ(digest->length, digest->data, buffer) == 0)
+  for (offset = 0; offset <= msg->length && offset < 40; offset++)
     {
-      fprintf(stdout, "\nGot:\n");
-      print_hex(digest->length, buffer);
-      fprintf(stdout, "\nExpected:\n");
-      print_hex(digest->length, digest->data);
-      abort();
+      hash->update(ctx, offset, msg->data);
+      hash->update(ctx, 0, NULL);
+      hash->update(ctx, msg->length - offset, msg->data + offset);
+
+      hash->digest(ctx, digest->length, buffer);
+
+      if (MEMEQ(digest->length, digest->data, buffer) == 0)
+	{
+	  fprintf(stdout, "Offset %u\nGot:\n", offset);
+	  print_hex(digest->length, buffer);
+	  fprintf(stdout, "\nExpected:\n");
+	  print_hex(digest->length, digest->data);
+	  abort();
+	}
     }
 
   memset(buffer, 0, digest->length);
