@@ -1,6 +1,9 @@
-/* sha512-256-meta.c
+/* shake128.c
 
-   Copyright (C) 2014 Niels Möller
+   The SHAKE128 hash function, arbitrary length output.
+
+   Copyright (C) 2017 Daiki Ueno
+   Copyright (C) 2017 Red Hat, Inc.
 
    This file is part of GNU Nettle.
 
@@ -33,17 +36,41 @@
 # include "config.h"
 #endif
 
-#include "nettle-meta.h"
+#include <string.h>
 
-#include "sha2.h"
+#include "sha3.h"
+#include "sha3-internal.h"
 
-const struct nettle_hash nettle_sha512_256 =
-  {
-    "sha512_256", sizeof(struct sha512_ctx),
-    SHA512_256_DIGEST_SIZE,
-    SHA512_256_BLOCK_SIZE,
-    (nettle_hash_init_func *) sha512_256_init,
-    (nettle_hash_update_func *) sha512_256_update,
-    (nettle_hash_digest_func *) sha512_256_digest
-  };
+void
+sha3_128_init (struct sha3_128_ctx *ctx)
+{
+  memset (ctx, 0, offsetof (struct sha3_128_ctx, block));
+}
 
+void
+sha3_128_update (struct sha3_128_ctx *ctx,
+		 size_t length,
+		 const uint8_t *data)
+{
+  ctx->index = _nettle_sha3_update (&ctx->state,
+				    SHA3_128_BLOCK_SIZE, ctx->block,
+				    ctx->index, length, data);
+}
+
+void
+sha3_128_shake (struct sha3_128_ctx *ctx,
+		size_t length, uint8_t *dst)
+{
+  _nettle_sha3_shake (&ctx->state, sizeof (ctx->block), ctx->block, ctx->index, length, dst);
+  sha3_128_init (ctx);
+}
+
+void
+sha3_128_shake_output (struct sha3_128_ctx *ctx,
+		       size_t length, uint8_t *digest)
+{
+  ctx->index =
+    _nettle_sha3_shake_output (&ctx->state,
+			       sizeof (ctx->block), ctx->block, ctx->index,
+			       length, digest);
+}
