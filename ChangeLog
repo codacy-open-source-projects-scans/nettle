@@ -1,3 +1,43 @@
+2024-06-16  Niels Möller  <nisse@lysator.liu.se>
+
+	* Released Nettle-3.10.
+
+	* examples/rsa-encrypt-test: Consistently add $EXEEXT to
+	executable names.
+	* examples/rsa-sign-test: Likewise.
+	* examples/rsa-verify-test: Likewise.
+	* examples/setup-env: Likewise.
+	* tools/nettle-pbkdf2-test: Likewise.
+	* tools/pkcs1-conv-test: Likewise
+	* tools/sexp-conv-test: Likewise.
+
+	* configure.ac: When cross-compiling targetting windows,
+	always use "wine" as EMULATOR; using "wine64" for 64-bit windows
+	seems no longer needed.
+
+2024-06-15  Niels Möller  <nisse@lysator.liu.se>
+
+	* testsuite/Makefile.in (TS_SC_NETTLE): New variable.
+	(DISTFILES): Unconditionally include side-channel tests,
+	fix accidental dependence on IF_VALGRIND.
+
+2024-06-11  Niels Möller  <nisse@lysator.liu.se>
+
+	* fat-arm64.c: Enable use of getauxval on android, for
+	__ANDROID_API__ >= 18.
+
+2024-06-10  Niels Möller  <nisse@lysator.liu.se>
+
+	From Eric Richter:
+	* powerpc64/p8/sha256-compress-n.asm: New file.
+	* powerpc64/fat/sha256-compress-n-2.asm: New file.
+	* fat-ppc.c: Add fat setup for _nettle_sha256_compress_n.
+
+2024-06-09  Niels Möller  <nisse@lysator.liu.se>
+
+	* ecc-internal.h (assert_maybe) [!WITH_EXTRA_ASSERTS]: Cast to
+	void, to avoid warnings.
+
 2024-06-05  Niels Möller  <nisse@lysator.liu.se>
 
 	* config.guess: Update to 2024-01-01 version.
