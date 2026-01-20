@@ -1,3 +1,48 @@
+2026-01-18  Niels Möller  <nisse@lysator.liu.se>
+
+	* nettle.texinfo (Hash functions): Update hash intro.
+	(Authenticated encryption): Revise intro.
+	(Randomness): Recommend using operating system randomness
+	facilities.
+
+2026-01-14  Niels Möller  <nisse@lysator.liu.se>
+
+	* nettle.texinfo (OCB): Update OCB documentation.
+
+	* ocb.h (struct ocb_ctx): New field tag_length, storing the size
+	passed to ocb_set_nonce.
+	* ocb.c (ocb_set_nonce): Store tag length in context.
+	(ocb_digest): Delete length argument. Size of digest was stored in
+	the context by ocb_set_nonce. Updated all callers.
+	* ocb-aes128.c (ocb_aes128_digest): Deleted length argument.
+	* non-nettle.c (ocb_aes128_t96_digest): Deleted.
+
+	* nettle.texinfo (CCM): Update CCM documentation.
+
+	* ccm.h (CCM_MIN_DIGEST_SIZE): New constant.
+	(struct ccm_ctx): New field tag_length, storing the size used for
+	constructing the IV in ccm_set_nonce.
+	* ccm.c (ccm_set_nonce): Check that tag length is according to
+	spec, and store in context.
+	(ccm_digest): Delete length argument. Size of digest was stored in
+	the context by ccm_set_nonce. Updated all callers.
+	* ccm-aes128.c (ccm_aes128_digest): Delete length argument.
+	* ccm-aes192.c (ccm_aes192_digest): Likewise.
+	* ccm-aes256.c: Likewise.
+	* testsuite/ccm-test.c (test_main): Delete test from IEEE
+	802.15.4-2011, C.2.2, since it uses an invalid zero tag length.
+
+2026-01-08  Niels Möller  <nisse@lysator.liu.se>
+
+	* ocb.c (update_offset): Deleted function, replaced with...
+	(ocb_mul_xk): New function.
+	(ocb_fill_n): Use ocb_mul_xk both in main loop and for final block.
+
+	* ocb.h (struct ocb_ctx): Change types of data_count and
+	message_count to uint32_t and uint64_t, respectively, from size_t.
+	Makes the implementation limits on the size of associated data and
+	cleartext be platform independent.
+
 2026-01-02  Niels Möller  <nisse@lysator.liu.se>
 
 	* sexp.c (sexp_iterator_exit_list): Rewrite to not recurse via

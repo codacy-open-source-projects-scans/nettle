@@ -15,7 +15,7 @@
 This manual is for the Nettle library (version @value{UPDATED-FOR}), a
 low-level cryptographic library.
 
-Originally written 2001 by @value{AUTHOR}, updated 2025.
+Originally written 2001 by @value{AUTHOR}, updated 2026.
 
 @quotation
 This manual is placed in the public domain. You may freely copy it, in
@@ -410,13 +410,11 @@ Hash functions are useful as building blocks for digital signatures,
 message authentication codes, pseudo random generators, association of
 unique ids to documents, and many other things.
 
-The most commonly used hash functions are MD5 and SHA1. Unfortunately,
-both these fail the collision-resistance requirement; cryptologists have
-found ways to construct colliding inputs. The recommended hash functions
-for new applications are SHA2 (with main variants SHA256 and SHA512). At
-the time of this writing (Autumn 2015), SHA3 has recently been
-standardized, and the new SHA3 and other top SHA3 candidates may also be
-reasonable alternatives.
+The SHA1 hash function is still quite commonly used, even though it
+fails the collision-resistance requirement; cryptologists have found
+ways to construct colliding inputs. The recommended hash functions for
+new applications are SHA2 (with main variants SHA256 and SHA512) and
+SHA3 (several variants, including SHA3-256, SHAKE256 and SHA3-512).
 
 @menu
 * Recommended hash functions::
@@ -877,7 +875,7 @@ This function also resets the context in the same way as
 SM3 is a cryptographic hash function standard adopted by the government of the
 People's Republic of China, which was issued by the Cryptography Standardization
 Technical Committee of China on December 17, 2010. The corresponding standard
-is GM/T 0004-2012 "SM3 Cryptographic Hash Algorithm".
+is GM/T 0004-2012 ``SM3 Cryptographic Hash Algorithm''.
 
 SM3 algorithm is a hash algorithm in ShangMi cryptosystems. SM3 is mainly used
 for digital signature and verification, message authentication code generation
@@ -2153,7 +2151,7 @@ Analogous to @code{serpent_encrypt}
 
 SM4 is a block cipher standard adopted by the government of the People's
 Republic of China, and it was issued by the State Cryptography Administration
-on March 21, 2012. The standard is GM/T 0002-2012 "SM4 block cipher algorithm".
+on March 21, 2012. The standard is GM/T 0002-2012 ``SM4 block cipher algorithm''.
 Nettle defines it in @file{<nettle/sm4.h>}.
 
 @deftp {Context struct} {struct sm4_ctx}
@@ -2804,8 +2802,8 @@ structure.
 @cindex AEAD
 @cindex Authenticated encryption
 
-Since there are some subtle design choices to be made when combining a
-block cipher mode with out authentication with a @acronym{MAC}. In
+There are some subtle design choices to be made when combining a
+block cipher mode without authentication with a @acronym{MAC}. In
 recent years, several constructions that combine encryption and
 authentication have been defined. These constructions typically also
 have an additional input, the ``associated data'', which is
@@ -2818,8 +2816,7 @@ messages. This family of building blocks are therefore called
 The aim is to provide building blocks that it is easier for designers of
 protocols and applications to use correctly. There is also some
 potential for improved performance, if encryption and authentication can
-be done in a single step, although that potential is not realized for
-the constructions currently supported by Nettle.
+be done in a single step.
 
 For encryption, the inputs are:
 
@@ -2845,9 +2842,9 @@ A digest or ``authentication tag''.
 @end itemize
 
 Decryption works the same, but with cleartext and ciphertext
-interchanged. All currently supported @acronym{AEAD} algorithms always
+interchanged. Most of the currently supported @acronym{AEAD} algorithms
 use the encryption function of the underlying block cipher, for both
-encryption and decryption.
+encryption and decryption (OCB being a notable exception).
 
 Usually, the authentication tag should be appended at the end of the
 ciphertext, producing an encrypted message which is slightly longer than
@@ -2863,16 +2860,18 @@ use a length that is a multiple of the block size, although some
 mode is a bit special in that it requires the message lengths up front,
 other @acronym{AEAD} constructions don't have this restriction.
 
-The supported @acronym{AEAD} constructions are Galois/Counter mode
-(@acronym{GCM}), @acronym{EAX}, ChaCha-Poly1305, and Counter with
-@acronym{CBC}-@acronym{MAC} (@acronym{CCM}). There are some weaknesses
-in @acronym{GCM} authentication, see
-@url{https://csrc.nist.gov/groups/ST/toolkit/BCM/documents/comments@//CWC-GCM/Ferguson2.pdf}.
-@acronym{CCM} and @acronym{EAX} use the same building blocks, but the
+Of the supported @acronym{AEAD} constructions in Nettle, Galois/Counter
+mode (@acronym{GCM}) is widely used, and was originally designed for
+high performance in hardware implementations. Software performance is
+rather poor unless there's an efficient ``carry-less multiplication''
+instruction that can be used. Both @acronym{CCM} and @acronym{EAX} use
+the same building blocks, @acronym{CTR} and @acronym{CMAC}, but the
 @acronym{EAX} design is cleaner and avoids a couple of inconveniences of
 @acronym{CCM}. Therefore, @acronym{EAX} seems like a good conservative
-choice. The more recent ChaCha-Poly1305 may also be an attractive but
-more adventurous alternative, in particular if performance is important.
+choice. The ChaCha-Poly1305 scheme is designed for high performance,
+also on machines without specialized crypto acceleration instructions.
+The Synthetic Initialization Vector (@acronym{SIV}) modes are designed
+to not fail catastrophically if a nonce is reused.
 
 @menu
 * EAX::
@@ -3352,7 +3351,9 @@ shortest string of zero bytes such that @code{IC} is exactly one block
 in length.
 
 @item The authentication tag is encrypted using using @acronym{CTR} mode:
-@code{MAC = E_k(IC) XOR T}
+@code{MAC = E_k(IC) XOR T}. The tag size must be even, at least 4, and
+at most 16. The intended tag size is encoded into @code{IC} via the
+@code{flags} field.
 
 @item The plaintext is then encrypted using @acronym{CTR} mode with an
 initial counter of @code{IC+1}.
@@ -3381,8 +3382,13 @@ Holds state corresponding to a particular message.
 @end defvr
 
 @defvr Constant CCM_DIGEST_SIZE
-Size of the @acronym{CCM} digest, 16.
+Recommended size of the @acronym{CCM} digest, 16.
 @end defvr
+
+@defvr Constant CCM_MIN_DIGEST_SIZE
+Smallest size of the @acronym{CCM} digest, 4.
+@end defvr
+
 
 @defvr Constant CCM_MIN_NONCE_SIZE
 @defvrx Constant CCM_MAX_NONCE_SIZE
@@ -3414,10 +3420,12 @@ for each message @emph{must} use a length that is a multiple of the
 block size.
 @end deftypefun
 
-@deftypefun void ccm_digest (struct ccm_ctx *@var{ctx}, const void *@var{cipher}, nettle_cipher_func *@var{f}, size_t @var{length}, uint8_t *@var{digest})
+@deftypefun void ccm_digest (struct ccm_ctx *@var{ctx}, const void *@var{cipher}, nettle_cipher_func *@var{f}, uint8_t *@var{digest})
 Extracts the message digest (also known ``authentication tag''). This is
-the final operation when processing a message. @var{length} should be
-equal to the @var{taglen} parameter supplied to @code{ccm_set_nonce},
+the final operation when processing a message. It writes @var{taglen}
+octets to the @var{digest} area, where @var{taglen} is the parameter
+supplied to @code{ccm_set_nonce} earlier. A buffer of size
+@code{CCM_DIGEST_SIZE}, i.e., 16, is always sufficient.
 @end deftypefun
 
 To encrypt a message using the general @acronym{CCM} interface, set the
@@ -3515,11 +3523,14 @@ These are identical to @code{ccm_encrypt} and @code{ccm_decrypt}, except
 that @var{cipher}, @var{f}, and @var{ctx} are replaced with a context structure.
 @end deftypefun
 
-@deftypefun void ccm_aes128_digest (struct ccm_aes128_ctx *@var{ctx}, size_t @var{length}, uint8_t *@var{digest})
-@deftypefunx void ccm_aes192_digest (struct ccm_aes192_ctx *@var{ctx}, size_t @var{length}, uint8_t *@var{digest})
-@deftypefunx void ccm_aes256_digest (struct ccm_aes256_ctx *@var{ctx}, size_t @var{length}, uint8_t *@var{digest})
+@deftypefun void ccm_aes128_digest (struct ccm_aes128_ctx *@var{ctx}, uint8_t *@var{digest})
+@deftypefunx void ccm_aes192_digest (struct ccm_aes192_ctx *@var{ctx}, uint8_t *@var{digest})
+@deftypefunx void ccm_aes256_digest (struct ccm_aes256_ctx *@var{ctx}, uint8_t *@var{digest})
 These are identical to @code{ccm_digest}, except that @var{cipher},
-@var{f}, and @var{ctx} are replaced with a context structure.
+@var{f}, and @var{ctx} are replaced with a context structure. The number
+of octets written to the @var{digest} area is determined by the
+@var{taglen} parameter supplied to the corresponding @code{_set_nonce}
+function earlier.
 @end deftypefun
 
 @deftypefun void ccm_aes128_encrypt_message (const struct aes128_ctx *@var{cipher}, size_t @var{nlength}, const uint8_t *@var{nonce}, size_t @var{alength}, const uint8_t *@var{adata}, size_t @var{tlength}, size_t @var{clength}, uint8_t *@var{dst}, const uint8_t *@var{src})
@@ -3645,7 +3656,7 @@ The maximum nonce size for @acronym{OCB}, 15.
 @end defvr
 
 @defvr Constant OCB_DIGEST_SIZE
-Size of the @acronym{OCB} authentication tag.
+Recommended size of the @acronym{OCB} authentication tag, 16.
 @end defvr
 
 @deftypefun void ocb_set_key (struct ocb_key *@var{key}, const void *@var{cipher}, nettle_cipher_func *@var{f})
@@ -3658,9 +3669,8 @@ encryption function.
 Initializes @var{ctx} for processing a new message, using the given
 nonce. The @var{cipher} must be initialized for encryption, and @var{f}
 should be the corresponding encryption function. The @var{tag_length}
-(non-zero, and at most 16) is included when initializing the state, and
-should be the same value later passed to @code{ocb_digest}. Nonce is
-optional, and length at most 15 bytes.
+(non-zero, and at most 16) is included when initializing the state.
+Nonce is optional, and length at most 15 bytes.
 @end deftypefun
 
 @deftypefun void ocb_update (struct ocb_ctx *@var{ctx}, const struct ocb_key *@var{key}, const void *@var{cipher}, nettle_cipher_func *@var{f}, size_t @var{length}, const uint8_t *@var{data})
@@ -3685,12 +3695,12 @@ the same). All but the last call for each message @emph{must} use a
 length that is a multiple of the block size.
 @end deftypefun
 
-@deftypefun void ocb_digest (const struct ocb_ctx *@var{ctx}, const struct ocb_key *@var{key}, const void *@var{cipher}, nettle_cipher_func *@var{f}, size_t @var{length}, uint8_t *@var{digest})
+@deftypefun void ocb_digest (const struct ocb_ctx *@var{ctx}, const struct ocb_key *@var{key}, const void *@var{cipher}, nettle_cipher_func *@var{f}, uint8_t *@var{digest})
 Extracts the message digest (also known ``authentication tag''). This is
-the final operation when processing a message. The @var{length} value
-@emph{should} be the same as the tag length passed to the preceding
-@code{ocb_set_nonce} call (using a different length is possible, but
-incompatible with @cite{RFC 7253}).
+the final operation when processing a message. It writes @var{tag_length}
+octets to the @var{digest} area, where @var{tag_length} is the parameter
+supplied to @code{ocb_set_nonce} earlier. A buffer of size
+@code{OCB_DIGEST_SIZE}, i.e., 16, is always sufficient.
 @end deftypefun
 
 @deftypefun void ocb_encrypt_message (const struct ocb_key *@var{ocb_key}, const void *@var{cipher}, nettle_cipher_func *@var{f}, size_t @var{nlength}, const uint8_t *@var{nonce}, size_t @var{alength}, const uint8_t *@var{adata}, size_t @var{tlength}, size_t @var{clength}, uint8_t *@var{dst}, const uint8_t *@var{src})
@@ -3757,12 +3767,11 @@ each message @emph{must} use a length that is a multiple of the block
 size.
 @end deftypefun
 
-@deftypefun void ocb_aes128_digest (struct ocb_ctx *@var{ctx}, const struct ocb_aes128_encrypt_key *@var{key}, size_t @var{length}, uint8_t *@var{digest})
+@deftypefun void ocb_aes128_digest (struct ocb_ctx *@var{ctx}, const struct ocb_aes128_encrypt_key *@var{key}, uint8_t *@var{digest})
 Extracts the message digest (also known ``authentication tag''). This is
-the final operation when processing a message. The @var{length} value
-@emph{should} be the same as the tag length passed to the preceding
-@code{ocb_aes128_set_nonce} call (using a different length is possible, but
-incompatible with @cite{RFC 7253}).
+the final operation when processing a message. The number of octets
+written to the @var{digest} area is determined by the @var{tag_length}
+parameter supplied to the @code{ocb_aes128_set_nonce} function earlier.
 @end deftypefun
 
 @deftypefun void ocb_aes128_encrypt_message (const struct ocb_aes128_encrypt_key *@var{key}, size_t @var{nlength}, const uint8_t *@var{nonce}, size_t @var{alength}, const uint8_t *@var{adata}, size_t @var{tlength}, size_t @var{clength}, uint8_t *@var{dst}, const uint8_t *@var{src})
@@ -4472,9 +4481,9 @@ attacks by using salting and expensive computation.
 HKDF is a key derivation function used as a building block of
 higher-level protocols like TLS 1.3. It is a derivation function
 based on HMAC described in @cite{RFC 5869},
-and is split into two logical modules, called 'extract' and 'expand'.
+and is split into two logical modules, called ``extract'' and ``expand''.
 The extract module takes an initial secret and a random
-salt to "extract" a fixed-length pseudorandom key (PRK). The second stage
+salt to extract a fixed-length pseudorandom key (PRK). The second stage
 takes as input the previous PRK and some informational data (e.g.,
 text) and expands them into multiple keys.
 
@@ -5775,13 +5784,13 @@ signature is valid, otherwise 0.
 @cindex SPHINCS+
 
 SLH-DSA stands for Stateless hash-based digital signature algorithm. As
-the name suggests, it's security is based a cryptographic hash function.
-It is intended to be secure against an attacker with a large working
-quantum computer, often referred to as a ``post-quantum'' cryptographic
-algorithm. This is in contrast to ``classical'' public key algorithms
-based on the difficulty of the discrete logarithm problem or the
-factoring problem, because those problems can be solved efficiently if
-or when the attacker has a large scale quantum computer at their
+the name suggests, its security is based on a cryptographic hash
+function. It is intended to be secure against an attacker with a large
+working quantum computer, often referred to as a ``post-quantum''
+cryptographic algorithm. This is in contrast to ``classical'' public key
+algorithms based on the difficulty of the discrete logarithm problem or
+the factoring problem, because those problems can be solved efficiently
+if or when the attacker has a large scale quantum computer at their
 disposal.
 
 The SLH-DSA algorithm was standardized by NIST in 2024, as
@@ -5897,6 +5906,14 @@ If this assumption is not true in practice, systems that are otherwise
 perfectly secure, can be broken. Randomness has often turned out to be
 the weakest link in the chain.
 
+Building a good randomness source is subtle, in particular if your
+program may run inside several layers of virtualization. Today, most
+operating system provides a good randomness source, e.g.,
+@file{/dev/random} and the @code{getrandom} syscall on GNU/Linux. Please
+use that, possibly in combination with a @acronym{KDF}! If for some
+reason that is not possible and you @emph{have} to roll your own, the
+rest of this section provides some advice.
+
 In non-cryptographic applications, such as games as well as scientific
 simulation, a good randomness generator usually means a generator that
 has good statistical properties, and is seeded by some simple function
@@ -5904,7 +5921,6 @@ of things like the current time, process id, and host name.
 
 However, such a generator is inadequate for cryptography, for at least
 two reasons:
-
 
 @itemize
 
@@ -6014,16 +6030,17 @@ attackers that we care about (typically, we must at the very least
 assume that no attacker has root privileges on our machine).
 
 How do we generate output from this seed, and how much can we get? Some
-generators (notably the Linux @file{/dev/random} generator) tries to
-estimate available entropy and restrict the amount of output. The goal
-is that if you read 128 bits from @file{/dev/random}, you should get 128
-``truly random'' bits. This is a property that is useful in some
-specialized circumstances, for instance when generating key material for
-a one time pad, or when working with unconditional blinding, but in most
-cases, it doesn't matter much. For most application, there's no limit on
-the amount of useful ``random'' data that we can generate from a small
-seed; what matters is that the seed is unguessable and that the
-generator has good cryptographic properties.
+generators (notably older versions of the Linux @file{/dev/random}
+generator) tries to estimate available entropy and restrict the amount
+of output. The goal was that if you read 512 bits from
+@file{/dev/random}, you should get 512 ``truly random'' bits. This is a
+property that is useful in some specialized circumstances, for instance
+when generating key material for a one time pad, or when working with
+unconditional blinding, but in most cases, it doesn't matter much. For
+most application, there's no limit on the amount of useful ``random''
+data that we can generate from a small seed; what matters is that the
+seed is unguessable and that the generator has good cryptographic
+properties.
 
 At the heart of all generators lies its internal state. Future output
 is determined by the internal state alone. Let's call it the generator's
@@ -6492,7 +6509,8 @@ Servera med kokta ägghalvor.
 @node Installation
 @chapter Installation
 
-Nettle uses @command{autoconf}. To build it, unpack the source and run
+Nettle uses @command{autoconf}, and the generated Makefile requires GNU
+make. To build Nettle, unpack the source and run
 
 @example
 ./configure
@@ -6502,18 +6520,19 @@ make install
 @end example
 
 @noindent
-to install it under the default prefix, @file{/usr/local}. Using GNU
-make is strongly recommended. By default, both static and shared
-libraries are built and installed.
+to install it under the default prefix, @file{/usr/local}. By default,
+both static and shared libraries are built and installed.
 
 To get a list of configure options, use @code{./configure --help}. Some
 of the more interesting are:
 
 @table @option
-@item --enable-fat
-Include multiple versions of certain functions in the library, and
-select the ones to use at run-time, depending on available processor
-features. Supported for ARM and x86_64.
+@item --prefix
+Change install location.
+
+@item --disable-fat
+Disable run-time detection of available processor features. Additional
+configure options can be used to select which features to require.
 
 @item --enable-mini-gmp
 Use the smaller and slower ``mini-gmp'' implementation of the bignum
@@ -6525,10 +6544,6 @@ information.
 
 @item --disable-shared
 Omit building the shared libraries.
-
-@item --disable-dependency-tracking
-Disable the automatic dependency tracking. You will likely need this
-option to be able to build with BSD make.
 
 @end table
 
