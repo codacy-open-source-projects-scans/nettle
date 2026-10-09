@@ -1,3 +1,330 @@
+2026-10-07  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (MATRIX_GET_VECTOR, MATRIX_GET_POLY): Deleted
+	macros.
+	(sample_ntt): New function, to sample a single matrix element. Replaces...
+	(matrix_sample, poly_sample): ...deleted functions.
+	(matrix_mul_ntt): Rewrite, and compute matrix elements on the fly.
+	(matrix_addmul_ntt): New function, computing the matrix elements
+	on the fly.
+	(inner_generate_keypair): Use matrix_addmul_ntt, and reduce
+	scratch need from N (k^2 + 3k) to N (2k + 1).
+	(inner_encrypt): Update use of matrix_mul_ntt, and reduce scratch
+	need from N (k^2 + 4k + 1) to N (2k + 2). Also reduce stack
+	allocation.
+	(vector_sample): Let caller pass in the buffer area.
+	(inner_generate_keypair): Reduce stack allocation, and use scratch
+	space for vector_sample.
+	(inner_encrypt): Use scratch space for vector_sample.
+	(VECTOR_GET_POLY): Delete macro, update callers to use plain
+	pointer arithmetic.
+	(inner_decrypt, _ml_kem_encap, _ml_kem_decap): Use scratch space
+	instead of stack allocation.
+
+2026-10-06  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (poly_addmul_ntt): New function.
+	(vector_mul_ntt): Simplify using poly_addmul_ntt, and reduce stack
+	allocation.
+
+	* ml-kem-internal.h (ML_KEM_768_INNER_PUBLIC_KEY_SIZE)
+	(ML_KEM_1024_INNER_PUBLIC_KEY_SIZE): Deleted.
+	(struct ml_kem_params): Delete inner_public_key_size. Replace all
+	use with public_key_size, which is the same.
+
+	Reuse the same sha3_ctx for all hashing. Reduces stack allocation,
+	and eliminates redundant sha3_init calls.
+	* ml-kem-internal.c (H, G2, J2, PRF): Delete call to sha3_init,
+	let caller be responsible for initialization.
+	(vector_sample, matrix_sample, inner_generate_keypair)
+	(inner_encrypt): Take a sha3_ctx from caller.
+	(_ml_kem_generate_keypair, _ml_kem_encap, _ml_kem_decap): Allocate
+	and initialize a single sha3_ctx (on stack), reuse for everything.
+
+2026-10-05  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c: (compress, decompress): Deleted functions.
+	(vector_encode, vector_decode): Deleted functions.
+	(poly_encode, poly_decode): Replaced by below functions.
+	(compress_encode): New function, replacing poly_encode and
+	vector_decode, and inlining compress operation.
+	(decompress_decode): New function replacing poly_decode and
+	vector_decode, and inlining decompress operation.
+	(inner_encrypt): Use compress_encode.
+	(inner_decrypt): Use decompress_decode.
+	(inner_decrypt): Use compress_encode.
+
+	* ml-kem-internal.c (MAX_ETA): Renamed constant, was...
+	(MAX_ETA1): ...old name.
+	(vector_sample): Rename argument eta1 --> eta, since this function
+	is used with both ETA2 and params->eta1.
+	(full_encode, full_decode): New functions.
+	(poly_decode): Delete no longer needed mod q reduction.
+	(inner_generate_keypair): Use full_encode.
+	(inner_encrypt, inner_decrypt): Use full_decode.
+
+	* ecc-secp256r1.c (ecc_secp256r1_modp): Fix call to mpn_cnd_add_n
+	to pass zero or one.
+	* ecc-mod-inv.c (ecc_mod_inv): Likewise.
+
+2026-10-04  Niels Möller  <nisse@lysator.liu.se>
+
+	In replacement functions used with mini-gmp, avoid constructions
+	that are compiled as branches on some processors, in particular
+	AVR. Problem reported by Zahiya Zahid.
+	* gmp-glue.c (mpn_cnd_add_n, mpn_cnd_sub_n, mpn_cnd_swap): Require
+	that the cnd argument is zero or one, and use -cnd as a mask.
+	(mpn_sec_tabselect): Construct the mask using IS_ZERO_SMALL.
+
+2026-09-23  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (MATRIX_GET_VECTOR): Delete unused macro.
+	(poly_addmul_ntt): New function.
+	(vector_mul_ntt): Use poly_addmul_ntt, eliminate temporary array.
+
+2026-09-21  Niels Möller  <nisse@lysator.liu.se>
+
+	* sntrup761.c (uint32_16_mod): Moved, to...
+	* nettle-internal.h (uint32_16_mod): ...new location, shared
+	between ml-kem and sntrup761.
+	* ml-kem-internal.c (reduce): Rewrite as wrapper around uint32_16_mod.
+
+2026-09-19  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c: Declare all the "inner" functions as static.
+	(_ml_kem_inner_decrypt_itch): Delete unused function.
+	* ml-kem-internal.h: Delete corresponding declarations.
+
+	* ml-kem.c: Deleted file. The generic top-level functions moved to
+	ml-kem-internal.c.
+	* ml-kem-internal.c (H, J2): New macros, moved from ml-kem.c.
+	(_ml_kem_generate_keypair_itch, _ml_kem_generate_keypair)
+	(_ml_kem_encap_itch, _ml_kem_encap, _ml_kem_decap_itch)
+	(_ml_kem_decap): New internal functions, moved from ml-kem.c.
+	* ml-kem-768.c (nettle_get_ml_kem_768_params): Deleted function.
+	* ml-kem-1024.c (nettle_get_ml_kem_1024_params): Deleted function.
+	* examples/hogweed-benchmark.c: Update ml-kem benchmarking to use
+	functions pointers for generate, encap and decap, instead of an
+	ml_kem_params pointer.
+
+2026-09-15  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c: Make use of extended reduce input range.
+	(poly_from_ntt): Eliminate unneeded mod_add.
+	(poly_mul_ntt): Likewise.
+	(mod_sub): Micro optimization of masking logic.
+
+2026-09-14  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (reduce): Rewrite using ceil(2^32/Q) as the
+	approximative inverse, extending input range to full 32-bits.
+
+2026-09-12  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (poly_encode): Rewrite to output complete
+	bytes, and not require output area to be initialized to zero by
+	caller.
+	(SET_BIT): Deleted now unused macro.
+	(_ml_kem_inner_generate_keypair): Delete no longer needed memset
+	calls.
+	(_ml_kem_inner_encrypt): Likewise.
+	(_ml_kem_inner_decrypt): Likewise.
+	(poly_decode): Rewrite to process one input byte at a time.
+	(popcount_small): New function.
+	(vector_sample): Rewrite to process bits 2*eta1 bits at a time and
+	use popcount_small.
+	(_ml_kem_inner_encrypt): Rewrite message expansion as one loop
+	over message bytes and an inner loop expanding each bit.
+	(IS_BIT_SET): Deleted now unused macro.
+
+2026-08-27  Niels Möller  <nisse@lysator.liu.se>
+
+	* nist-keywrap.c (nist_keyunwrap16): Use size_t for loop
+	variables, to avoid potentially lossy conversion from size_t to
+	int. Reported by Jérémy Jean.
+
+2026-08-13  Niels Möller  <nisse@lysator.liu.se>
+
+	* ocb-aes128.c (ocb_aes128_decrypt_message): Fix bug, which
+	completely broke processing of messages with plaintext size of 16
+	bytes or larger. Reported by Cao LLan77.
+	* testsuite/ocb-test.c (test_main): Extend corresponding tests.
+
+2026-08-05  Niels Möller  <nisse@lysator.liu.se>
+
+	* gcm.c (gcm_set_iv): Reject empty IV, with an assertion failure.
+	Empty IV is not allowed by the spec, and results in leakage of the
+	ghash authentication subkey. Reported by Feng Li and Yaobin Shen.
+	* nettle.texinfo (GCM): Document that IV must be non-empty.
+
+2026-06-30  Niels Möller  <nisse@lysator.liu.se>
+
+	* slh-dsa.c (_slh_dsa_sign): Change return type from void to int.
+	After checking expected root hash with memeql_sec, return result
+	rather than asserting that it is true.
+	* slh-dsa-sha2-128f.c (slh_dsa_sha2_128f_sign): Add return value,
+	return success/failure from _slh_dsa_sign, and on failure, clear
+	output signature to all zeros.
+	* slh-dsa-sha2-128s.c (slh_dsa_sha2_128s_sign): Likewise.
+	* slh-dsa-shake-128f.c (slh_dsa_shake_128f_sign): Likewise.
+	* slh-dsa-shake-128s.c (slh_dsa_shake_128s_sign): Likewise.
+	* testsuite/slh-dsa-test.c (test_slh_dsa): Check that signing
+	function returns failure, if public or private key is corrupted.
+	* nettle.texinfo (SLH-DSA): Update documentation.
+
+2026-06-05  Niels Möller  <nisse@lysator.liu.se>
+
+	* ml-kem-internal.c (compress, reduce, mod_sub, mod_add): Use
+	assert_maybe to back up input and output expectations.
+
+	* testsuite/ml-kem-test.c (test_ml_kem_pairwise): Take randomness
+	source as argument.
+	(test_randomized): New function, using test_get_seed for
+	initializing the pseudo randomness generator.
+	(test_main) [WITH_EXTRA_ASSERTS]: Skip side-channel tests.
+	(test_main): Call test_randomized.
+
+2026-06-04  Niels Möller  <nisse@lysator.liu.se>
+
+	* nettle-internal.h (assert_maybe): Move macro here, replacing old
+	copies. Update all users.
+	* ecc-internal.h (assert_maybe): Deleted.
+	* sntrup-internal.h (assert_maybe): Deleted.
+
+	* ecc-secp256r1.c (ecc_secp256r1_modq): Rewrite adjustment step,
+	to work around gcc on riscv64 generating an unwanted branch
+	instruction. Suggested by Felix Yan.
+
+2026-05-31  Niels Möller  <nisse@lysator.liu.se>
+
+	Support for ML-KEM, from Daiki Ueno:
+	* ml-kem.h: New header file.
+	(ML_KEM_SEED_SIZE, ML_KEM_SESSION_KEY_SIZE)
+	(ML_KEM_768_PUBLIC_KEY_SIZE, ML_KEM_768_PRIVATE_KEY_SIZE)
+	(ML_KEM_768_CIPHERTEXT_SIZE, ML_KEM_1024_PUBLIC_KEY_SIZE)
+	(ML_KEM_1024_PRIVATE_KEY_SIZE, ML_KEM_1024_CIPHERTEXT_SIZE): New constants.
+	* ml-kem.c (ml_kem_generate_keypair_itch)
+	(ml_kem_generate_keypair, ml_kem_encap_itch, ml_kem_encap)
+	(ml_kem_decap_itch, ml_kem_decap): New functions.
+	* ml-kem-internal.h: New file.
+	(struct ml_kem_params): New struct.
+	* ml-kem-internal.c (compress, decompress, reduce, mod_sub)
+	(mod_add, poly_into_ntt, poly_from_ntt, poly_mul_ntt)
+	(vector_mul_ntt, matrix_mul_ntt, poly_sample, vector_sample)
+	(matrix_sample, poly_encode, poly_decode, vector_encode)
+	(vector_decode): New static functions.
+	(_ml_kem_inner_generate_keypair_itch)
+	(_ml_kem_inner_generate_keypair, _ml_kem_inner_encrypt_itch)
+	(_ml_kem_inner_encrypt, _ml_kem_inner_decrypt_itch)
+	(_ml_kem_inner_decrypt): New internal functions.
+	* ml-kem-768.c (nettle_get_ml_kem_768_params): New file, new function.
+	* ml-kem-1024.c (nettle_get_ml_kem_1024_params): New file, new function.
+	* Makefile.in (nettle_SOURCES): Add ml-kem.c, ml-kem-768.c,
+	ml-kem-1024.c, and ml-kem-internal.c.
+	(HEADERS): Add ml-kem.h.
+	(DISTFILES): Add ml-kem-internal.h.
+	* testsuite/sc-ml-kem-test: New test case.
+	* testsuite/ml-kem-test.c: New test case.
+	* testsuite/Makefile.in (TS_NETTLE_SOURCES): Add ml-kem-test.c.
+	(TS_SC_NETTLE): Add sc-ml-kem-test.
+	(DISTFILES): Add ml-kem test files.
+	* examples/hogweed-benchmark.c (kem_alg_list): Add benchmarking of
+	ml_kem-768 and ml_kem-1024.
+	* nettle.texinfo (ML-KEM): Add documentation.
+
+2026-05-12  Niels Möller  <nisse@lysator.liu.se>
+
+	Avoid gcc-15 warnings on missing NUL terminators. Based on patch
+	by Georg Sauthoff:
+	* aclocal.m4 (NETTLE_C_ATTRIBUTES): Define NONSTRING attribute.
+	* base16-encode.c (hex_digits): Declare as NONSTRING.
+	* base64-encode.c (base64_encode_table): Likewise.
+	* blowfish-bcrypt.c (radix64_encode_table): Likewise.
+	* tools/pkcs1-conv.c (pem_start_pattern, pem_end_pattern, pem_trailer_pattern): Likewise.
+
+	* nettle-types.h (_NETTLE_ATTRIBUTE_PURE): Change preprocessor
+	conditionals to use __has_attribute.
+	(_NETTLE_ATTRIBUTE_DEPRECATED): Deleted, no longer used.
+
+2026-05-11  Niels Möller  <nisse@lysator.liu.se>
+
+	* aclocal.m4 (LSH_GCC_ATTRIBUTES): Delete macro, based on
+	AC_COMPILE_IF_ELSE, and config.h define HAVE_GCC_ATTRIBUTE.
+	Replaced by...
+	(NETTLE_C_ATTRIBUTES): Simpler macro, just adding code to config.h
+	to define CONSTRUCTOR, NORETURN, PRINTF_STYLE and UNUSED, when
+	corresponding attributes are supported according to
+	__has_attribute. The __has_attribute test was introduced in clang
+	and gcc a decade ago.
+	* configure.ac: Use NETTLE_C_ATTRIBUTES.
+	* fat-setup.h: Remove local definition of CONSTRUCTOR. Also drop
+	support for using #pragma init(...) with Sun compilers.
+
+2026-05-07  Niels Möller  <nisse@lysator.liu.se>
+
+	Add support for sntrup761.
+	* sntrup.h: Declare public sntrup761 functions.
+	(SNTRUP761_PRIVATE_KEY_SIZE, SNTRUP761_PUBLIC_KEY_SIZE)
+	(SNTRUP761_CIPHER_SIZE, SNTRUP_SESSION_KEY_SIZE): New constants.
+	* sntrup761-decap.c (sntrup761_decap): New function.
+	* sntrup761-encap.c (sntrup761_encap): New function.
+	* sntrup761-keygen.c (sntrup761_generate_keypair): New function.
+	* sntrup-internal.h: New header with internal declarations.
+	* sntrup761.c: New file, with shared sntrup internals.
+	* sntrupdata.c: New program, for generating sntrup encoding tables.
+	* Makefile.in (nettle_SOURCES): Add sntrup761.c,
+	sntrup761-keygen.c, sntrup761-decap.c, and sntrup761-encap.c.
+	(HEADERS): Add sntrup.h.
+	(SOURCES): Add sntrupdata.c.
+	(DISTFILES): Add sntrup-internal.h and sntrup761-encoding.h.
+	(sntrup761-encoding.h): Add make targets to generate this file by
+	compiling and running sntrupdata.c.
+
+	* testsuite/sntrup761-test.c: New test case.
+	* testsuite/sc-sntrup761-test: New test case.
+	* testsuite/sntrup761-tc0.ct: New reference cipher text.
+	* testsuite/sntrup761-tc0.pk: New reference public key.
+	* testsuite/sntrup761-tc0.sk: New reference secret key.
+	* testsuite/sntrup761-tc1.ct: Likewise.
+	* testsuite/sntrup761-tc1.pk: Likewise.
+	* testsuite/sntrup761-tc1.sk: Likewise.
+	* testsuite/Makefile.in (TS_NETTLE_SOURCES): Add sntrup761-test.c.
+	(TS_SC_HOGWEED): Add sc-sntrup761-test.
+	(DISTFILES): Add sntrup761 reference files.
+
+	* examples/hogweed-benchmark.c (struct alg): Renamed, to...
+	(struct sign_alg): ... new name.
+	(alg_list): Renamed list, to...
+	(sign_alg_list): ... new name. Also declare as static const.
+	(struct kem_alg, struct sntrup_ctx): New structs.
+	(bench_kem_alg, bench_sntrup_init, bench_sntrup_keygen)
+	(bench_sntrup_encrypt, bench_sntrup_decrypt, bench_sntrup_clear):
+	New functions.
+	(kem_alg_list): New algorithm list.
+	(main): Benchmark both signature and kem algorithms.
+
+	* nettle.texinfo (Key-Encapsulation mechanisms): Document
+	sntrup761.
+
+2026-05-03  Niels Möller  <nisse@lysator.liu.se>
+
+	* testsuite/testutils.c (test_random_seed, test_get_seed): New functions.
+	(get_random_seed): Deleted, replaced by test_random_seed.
+	(test_randinit): New function, using gmp_randinit_default and
+	test_random_seed. Replaces...
+	(test_randomize): ... deleted function. Updated all callers.
+
+2026-04-30  Niels Möller  <nisse@lysator.liu.se>
+
+	* sexp.c: Fix bugs reported by Sebastián Alba Vives.
+	(sexp_iterator_init): Fix truncation bug, by using size_t
+	for the length argument.
+	(sexp_iterator_simple): Check for arithmetic overflow when parsing
+	the decimal length field, and compare length to available input
+	only once.
+	* testsuite/sexp-test.c (test_main): Add tests for truncated
+	strings, including a test triggering 64-bit arithmetic overflow.
+
 2026-04-03  Niels Möller  <nisse@lysator.liu.se>
 
 	* drbg-ctr-aes256.c (drbg_ctr_aes256_init): Use const for
@@ -369,7 +696,7 @@
 	* Makefile.in (nettle_SOURCES): Add slh-dsa-shake-128f.c.
 
 	* testsuite/slh-dsa-test.c (test_main): Add test for slh-dsa-shake-128f.
-	* testsuite/slh-dsa-shake-128f.ref: New Reference signature.
+	* testsuite/slh-dsa-shake-128f.ref: New reference signature.
 	* testsuite/Makefile.in (DISTFILES): Add slh-dsa-shake-128f.ref.
 
 	* examples/hogweed-benchmark.c (bench_slh_dsa_sign): New function.

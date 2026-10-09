@@ -84,6 +84,7 @@ Reference
 * Keyed hash functions::
 * Key derivation functions::
 * Public-key algorithms::
+* Key-Encapsulation mechanisms::
 * Randomness::
 * ASCII encoding::
 * Miscellaneous functions::
@@ -376,6 +377,7 @@ This chapter describes all the Nettle functions, grouped by family.
 * Keyed hash functions::
 * Key derivation functions::
 * Public-key algorithms::
+* Key-Encapsulation mechanisms::
 * Randomness::
 * ASCII encoding::
 * Miscellaneous functions::
@@ -3079,7 +3081,8 @@ Size of the @acronym{GCM} digest, also 16.
 @end defvr
 
 @defvr Constant GCM_IV_SIZE
-Recommended size of the @acronym{IV}, 12. Arbitrary sizes are allowed.
+Recommended size of the @acronym{IV}, 12. Arbitrary non-zero sizes are
+allowed.
 @end defvr
 
 @deftypefun void gcm_set_key (struct gcm_key *@var{key}, const void *@var{cipher}, nettle_cipher_func *@var{f})
@@ -3089,9 +3092,9 @@ encryption, and @var{f} is the encryption function.
 @end deftypefun
 
 @deftypefun void gcm_set_iv (struct gcm_ctx *@var{ctx}, const struct gcm_key *@var{key}, size_t @var{length}, const uint8_t *@var{iv})
-Initializes @var{ctx} using the given @acronym{IV}. The @var{key}
-argument is actually needed only if @var{length} differs from
-@code{GCM_IV_SIZE}.
+Initializes @var{ctx} using the given @acronym{IV}, which must be
+non-empty. The @var{key} argument is actually needed only if
+@var{length} differs from @code{GCM_IV_SIZE}.
 @end deftypefun
 
 @deftypefun void gcm_update (struct gcm_ctx *@var{ctx}, const struct gcm_key *@var{key}, size_t @var{length}, const uint8_t *@var{data})
@@ -5835,6 +5838,18 @@ traversal of all leaves of the corresponding Merkle trees, and this is
 several orders of magnitude slower than signing using elliptic curves or
 RSA.
 
+The signing operation can recompute the top-level Merkle tree root
+almost for free. Nettle's SLH-DSA signing functions do that, and compare
+the resulting root hash to the provided public key. If the root hash is
+not as expected, the signing operation fails, and the returned signature
+is cleared to all zeros before return. This check is intended to detect
+invalid inputs, accidental corruption, and some types of software or
+hardware bugs that could affect the computation, but it is not a solid
+defense against deliberate fault injection attacks. Checking the return
+value from these signing functions is not strictly required; it's the
+application's choice if it prefers to handle this error, or pass on an
+invalid all-zero signature.
+
 Nettle currently implements the four SLH-DSA variants designed for
 ``128-bit security'': There's the choice of either SHA256 (in the SHA2
 family) or SHAKE256 (in the SHA3 family) as the underlying hash
@@ -5891,13 +5906,14 @@ typically called with @var{root} = @var{public_seed} +
 @code{SLH_DSA_128_SEED_SIZE}.
 @end deftypefun
 
-@deftypefun void slh_dsa_shake_128s_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
-@deftypefunx void slh_dsa_shake_128f_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
-@deftypefunx void slh_dsa_sha2_128s_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
-@deftypefunx void slh_dsa_sha2_128f_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
+@deftypefun int slh_dsa_shake_128s_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
+@deftypefunx int slh_dsa_shake_128f_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
+@deftypefunx int slh_dsa_sha2_128s_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
+@deftypefunx int slh_dsa_sha2_128f_sign (const uint8_t *@var{pub}, const uint8_t *@var{priv}, size_t @var{length}, const uint8_t *@var{msg}, uint8_t *@var{signature})
 Signs a message using the provided key pair. The size of the resulting
 signature is @code{SLH_DSA_128S_SIGNATURE_SIZE} or
-@code{SLH_DSA_128F_SIGNATURE_SIZE} for respective functions.
+@code{SLH_DSA_128F_SIGNATURE_SIZE} for respective functions. Returns 1
+on success, 0 on failure (see above on what failure means).
 @end deftypefun
 
 @deftypefun int slh_dsa_shake_128s_verify (const uint8_t *@var{pub}, size_t @var{length}, const uint8_t *@var{msg}, const uint8_t *@var{signature})
@@ -5906,6 +5922,162 @@ signature is @code{SLH_DSA_128S_SIGNATURE_SIZE} or
 @deftypefunx int slh_dsa_sha2_128f_verify (const uint8_t *@var{pub}, size_t @var{length}, const uint8_t *@var{msg}, const uint8_t *@var{signature})
 Verifies a message using the provided public key. Returns 1 if the
 signature is valid, otherwise 0.
+@end deftypefun
+
+@node Key-Encapsulation mechanisms
+@section Key-Encapsulation mechanisms
+
+@cindex Key-Encapsulation mechanisms
+@cindex KEM
+
+Key-Encapsulation mechanisms allows a sender to take a public key as
+input and produce (encapsulate) a session key wrapped in ciphertext, and
+the receiver to extract (decapsulate) the session key using its private
+key.
+
+Nettle supports the Streamlined NTRU Prime (@code{sntrup761}) and
+@acronym{ML-KEM} algorithms.
+
+
+@menu
+* sntrup761::                   Streamlined NTRU Prime.
+* ML-KEM::                      Module-Lattice-based Key-Encapsulation Mechanism.
+@end menu
+
+@node sntrup761
+@subsection sntrup761
+@cindex sntrup
+
+Nettle defines sntrup761 in @file{<nettle/sntrup.h>}.
+
+@defvr Constant SNTRUP761_PRIVATE_KEY_SIZE
+The size (1763 bytes) of the sntrup761 secret key.
+@end defvr
+
+@defvr Constant SNTRUP761_PUBLIC_KEY_SIZE
+The size (1158 bytes) of the sntrup761 secret key.
+@end defvr
+
+@defvr Constant SNTRUP761_CIPHER_SIZE
+The size (1039 bytes) of the sntrup761 ciphertext.
+@end defvr
+
+@defvr Constant SNTRUP_SESSION_KEY_SIZE
+The size (32 bytes) of the sntrup output session key.
+@end defvr
+
+@deftypefun void sntrup761_generate_keypair (uint8_t *@var{pk}, uint8_t *@var{sk}, void *@var{random_ctx}, nettle_random_func *@var{random})
+Generate a sntrup761 public key @var{pk} and private key @var{sk}, using
+randomness-generator @var{random} with context @var{random_ctx}.
+@end deftypefun
+
+@deftypefun void sntrup761_encap (const uint8_t *@var{pk}, uint8_t *@var{k}, uint8_t *@var{c}, void *@var{random_ctx}, nettle_random_func *@var{random})
+Generate a session key @var{k} and encapsulate it into ciphertext
+@var{c} for the recipient with public-key @var{pk}, using
+randomness-generator @var{random} with context @var{random_ctx}.
+@end deftypefun
+
+@deftypefun void sntrup761_decap (const uint8_t *@var{sk}, uint8_t *@var{k}, const uint8_t *@var{c})
+Decapsulate session key @var{k} from ciphertext @var{c} using the
+private key @var{sk}.
+@end deftypefun
+
+@node ML-KEM
+@subsection ML-KEM
+@cindex ML-KEM
+@cindex post-quantum
+@cindex Kyber
+
+ML-KEM stands for Module-Lattice-based Key-Encapsulation Mechanism,
+formerly known as Kyber. As the name suggests, its security is based
+on a lattice problem, called Decisional-Module Learning With Errors
+(D-MLWE). Similarly to SLH-DSA (@pxref{SLH-DSA}), it is a
+``post-quantum'' cryptographic algorithm intended to be secure against
+an attacker with a large working quantum computer. In August 2024, the
+algorithm was standardized by NIST, as FIPS 203,
+@url{https://doi.org/10.6028/NIST.FIPS.203}.
+
+Nettle defines ML-KEM in @file{<nettle/ml-kem.h>}, which supports two
+variants of the algorithm: ML-KEM-768 and ML-KEM-1024.
+
+The ML-KEM operations need several KiB of scratch space, which must be
+provided by the caller, as an argument @code{uint16_t *@var{scratch}}.
+The required size of the scratch buffer, in units of @code{uint16_t}, is
+returned by the corresponding @code{_itch} function.
+
+@defvr Constant ML_KEM_768_PRIVATE_KEY_SIZE
+The size (2400 bytes) of the ML-KEM-768 secret key.
+@end defvr
+
+@defvr Constant ML_KEM_768_PUBLIC_KEY_SIZE
+The size (1184 bytes) of the ML-KEM-768 secret key.
+@end defvr
+
+@defvr Constant ML_KEM_768_CIPHERTEXT_SIZE
+The size (1088 bytes) of the ML-KEM-768 ciphertext.
+@end defvr
+
+@defvr Constant ML_KEM_1024_PRIVATE_KEY_SIZE
+The size (3168 bytes) of the ML-KEM-1024 secret key.
+@end defvr
+
+@defvr Constant ML_KEM_1024_PUBLIC_KEY_SIZE
+The size (1568 bytes) of the ML-KEM-1024 secret key.
+@end defvr
+
+@defvr Constant ML_KEM_1024_CIPHERTEXT_SIZE
+The size (1568 bytes) of the ML-KEM-1024 ciphertext.
+@end defvr
+
+@defvr Constant ML_KEM_SESSION_KEY_SIZE
+The size (32 bytes) of the ML-KEM output session key.
+@end defvr
+
+@defvr Constant ML_KEM_SEED_SIZE
+The size (64 bytes) of the ML-KEM secret seed to be expanded to a
+secret key.
+@end defvr
+
+@deftypefun void ml_kem_768_generate_keypair (uint8_t *@var{pub}, uint8_t *@var{key}, const uint8_t *@var{seed}, uint16_t *@var{scratch})
+@deftypefunx void ml_kem_1024_generate_keypair (uint8_t *@var{pub}, uint8_t *@var{key}, const uint8_t *@var{seed}, uint16_t *@var{scratch})
+Generate an ML-KEM public key @var{pub} and private key @var{key} from
+the given @var{seed} of length @code{ML_KEM_SEED_SIZE}. The
+@var{scratch} buffer must be allocated by the caller, with scratch need
+determined by the corresponding itch function, below.
+@end deftypefun
+
+@deftypefun size_t ml_kem_768_generate_keypair_itch (void)
+@deftypefunx size_t ml_kem_1024_generate_keypair_itch (void)
+Compute the size of the scratch buffer @var{scratch} for generating an
+ML-KEM key pair.
+@end deftypefun
+
+@deftypefun void ml_kem_768_encap (const uint8_t *@var{pub}, uint8_t *@var{secret}, uint8_t *@var{ciphertext}, void *@var{random_ctx}, nettle_random_func *@var{random}, uint16_t *@var{scratch})
+@deftypefunx void ml_kem_1024_encap (const uint8_t *@var{pub}, uint8_t *@var{secret}, uint8_t *@var{ciphertext}, void *@var{random_ctx}, nettle_random_func *@var{random}, uint16_t *@var{scratch})
+Generate a session key @var{secret} and encapsulate it into ciphertext
+@var{ciphertext} for the recipient with public-key @var{pub}, using
+randomness-generator @var{random} with context @var{random_ctx}. The
+@var{scratch} buffer must be allocated by the caller, with scratch need
+determined by the corresponding itch function, below.
+@end deftypefun
+
+@deftypefun size_t ml_kem_768_encap_itch (void)
+@deftypefunx size_t ml_kem_1024_encap_itch (void)
+Compute the size of the scratch buffer @var{scratch} for ML-KEM encapsulation.
+@end deftypefun
+
+@deftypefun void ml_kem_768_decap (const uint8_t *@var{key}, uint8_t *@var{secret}, const uint8_t *@var{ciphertext}, uint16_t *@var{scratch})
+@deftypefunx void ml_kem_1024_decap (const uint8_t *@var{key}, uint8_t *@var{secret}, const uint8_t *@var{ciphertext}, uint16_t *@var{scratch})
+Decapsulate session key @var{secret} from ciphertext @var{ciphertext}
+using the private key @var{key}. The @var{scratch} buffer must be
+allocated by the caller, with scratch need determined by the
+corresponding itch function, below.
+@end deftypefun
+
+@deftypefun size_t ml_kem_768_decap_itch (void)
+@deftypefunx size_t ml_kem_1024_decap_itch (void)
+Compute the size of the scratch buffer @var{scratch} for ML-KEM
+decapsulation.
 @end deftypefun
 
 @node Randomness

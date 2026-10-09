@@ -71,6 +71,13 @@
   do { assert((size_t)(size) <= (sizeof(name))); } while (0)
 #endif 
 
+/* For asserts that are incompatible with sc tests. */
+#if WITH_EXTRA_ASSERTS
+# define assert_maybe(x) assert(x)
+#else
+# define assert_maybe(x) ((void)(x))
+#endif
+
 /* Limits that apply to systems that don't have alloca */
 #define NETTLE_MAX_HASH_BLOCK_SIZE 144  /* For sha3_224*/
 #define NETTLE_MAX_HASH_DIGEST_SIZE 64
@@ -82,6 +89,20 @@
 /* Equivalent to x == 0, but with an expression that should compile to
    branch free code on all compilers. Requires that x is at most 31 bits. */
 #define IS_ZERO_SMALL(x) (((uint32_t) (x) - 1U) >> 31)
+
+/* Computes u mod d, where u is 32 bits, d is 16 bits, and dinv must
+   be precomputed as dinv = ceil (2^32 / d) */
+static inline uint16_t
+uint32_16_mod (uint32_t u, uint16_t d, uint32_t dinv)
+{
+  uint32_t q, r, p;
+  q = ((uint64_t) dinv * u) >> 32;
+  p = q * d;
+  r = u - p; /* Interpreted as two's complement, |r| < d */
+  r += ((r >> 16) & d);
+  assert_maybe (r < d);
+  return r;
+}
 
 extern const struct nettle_hash * const _nettle_hashes[];
 

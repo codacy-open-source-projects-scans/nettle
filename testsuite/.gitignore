@@ -53,6 +53,7 @@
 /hkdf-test
 /hmac-test
 /knuth-lfib-test
+/ml-kem-test
 /md2-test
 /md4-test
 /md5-test
@@ -115,6 +116,7 @@
 /shake256-test
 /x86-ibt-test
 /drbg-ctr-aes256-test
+/sntrup761-test
 
 /test.in
 /test1.out

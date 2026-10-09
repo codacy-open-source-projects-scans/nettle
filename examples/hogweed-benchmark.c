@@ -1,6 +1,6 @@
 /* hogweed-benchmark.c
 
-   Copyright (C) 2013, 2014 Niels Möller
+   Copyright (C) 2013, 2014, 2026 Niels Möller
 
    This file is part of GNU Nettle.
 
@@ -52,6 +52,9 @@
 #include "curve25519.h"
 #include "curve448.h"
 #include "slh-dsa.h"
+#include "sntrup.h"
+#include "ml-kem.h"
+
 #include "nettle-meta.h"
 #include "sexp.h"
 #include "knuth-lfib.h"
@@ -104,15 +107,6 @@ hash_string (const struct nettle_hash *hash, const char *s)
   return digest;
 }
 
-struct alg {
-  const char *name;
-  unsigned size;
-  void *(*init) (unsigned size);
-  void (*sign)  (void *);
-  void (*verify)(void *);
-  void (*clear) (void *);
-};
-
 /* Returns second per function call */
 static double
 time_function(void (*f)(void *arg), void *arg)
@@ -140,8 +134,18 @@ time_function(void (*f)(void *arg), void *arg)
   return elapsed / ncalls;
 }
 
+struct sign_alg
+{
+  const char *name;
+  unsigned size;
+  void *(*init) (unsigned size);
+  void (*sign)  (void *);
+  void (*verify)(void *);
+  void (*clear) (void *);
+};
+
 static void 
-bench_alg (const struct alg *alg)
+bench_sign_alg (const struct sign_alg *alg)
 {
   double sign;
   double verify;
@@ -165,6 +169,42 @@ bench_alg (const struct alg *alg)
   else
     printf ("%16s %4d %9.2f %9.2f\n",
 	    alg->name, alg->size, 1.0/sign, 1.0/verify);
+}
+
+struct kem_alg
+{
+  const char *name;
+  unsigned size;
+  void *(*init)  (unsigned size);
+  void (*keygen) (void *);
+  void (*encrypt)(void *);
+  void (*decrypt)(void *);
+  void (*clear)  (void *);
+};
+
+static void
+bench_kem_alg (const struct kem_alg *alg)
+{
+  double keygen;
+  double encrypt;
+  double decrypt;
+  void *ctx;
+
+  ctx = alg->init(alg->size);
+  if (ctx == NULL)
+    {
+      printf("%16s %4d N/A\n", alg->name, alg->size);
+      return;
+    }
+
+  keygen = time_function (alg->keygen, ctx);
+  encrypt = time_function (alg->encrypt, ctx);
+  decrypt = time_function (alg->decrypt, ctx);
+
+  alg->clear (ctx);
+
+  printf ("%16s %4d %9.1f %9.1f %9.1f\n",
+	  alg->name, alg->size, 1.0/keygen, 1.0/encrypt, 1.0/decrypt);
 }
 
 struct rsa_ctx
@@ -861,7 +901,7 @@ struct slh_dsa_ctx
   uint8_t key[SLH_DSA_128_KEY_SIZE];
   uint8_t msg[10];
   uint8_t *sig;
-  void (*sign)(const uint8_t *pub, const uint8_t *priv,
+  int (*sign)(const uint8_t *pub, const uint8_t *priv,
 	       size_t length, const uint8_t *msg,
 	       uint8_t *signature);
   int (*verify)(const uint8_t *pub,
@@ -945,7 +985,8 @@ static void
 bench_slh_dsa_sign (void *p)
 {
   struct slh_dsa_ctx *ctx = p;
-  ctx->sign (ctx->pub, ctx->key, sizeof (ctx->msg), ctx->msg, ctx->sig);
+  int res = ctx->sign (ctx->pub, ctx->key, sizeof (ctx->msg), ctx->msg, ctx->sig);
+  assert (res);
 }
 
 static void
@@ -964,7 +1005,170 @@ bench_slh_dsa_clear (void *p)
   free (ctx);
 }
 
-struct alg alg_list[] = {
+struct sntrup_ctx
+{
+  uint8_t public_key[SNTRUP761_PUBLIC_KEY_SIZE];
+  uint8_t secret_key[SNTRUP761_PRIVATE_KEY_SIZE];
+  uint8_t ciphertext[SNTRUP761_CIPHER_SIZE];
+  struct knuth_lfib_ctx lfib;
+};
+
+static void *
+bench_sntrup_init (unsigned size)
+{
+  struct sntrup_ctx *ctx;
+  uint8_t session_key[SNTRUP_SESSION_KEY_SIZE];
+  assert (size == 761);
+  ctx = xalloc (sizeof (*ctx));
+
+  knuth_lfib_init (&ctx->lfib, 1);
+  sntrup761_generate_keypair (ctx->public_key, ctx->secret_key,
+			      &ctx->lfib,(nettle_random_func *)knuth_lfib_random);
+  sntrup761_encap (ctx->public_key, session_key, ctx->ciphertext,
+		   &ctx->lfib,(nettle_random_func *)knuth_lfib_random);
+
+  return ctx;
+}
+
+static void
+bench_sntrup_keygen (void *p)
+{
+  struct sntrup_ctx *ctx = p;
+  uint8_t public_key[SNTRUP761_PUBLIC_KEY_SIZE];
+  uint8_t secret_key[SNTRUP761_PRIVATE_KEY_SIZE];
+  sntrup761_generate_keypair (public_key, secret_key,
+			      &ctx->lfib,(nettle_random_func *)knuth_lfib_random);
+}
+
+static void
+bench_sntrup_encrypt (void *p)
+{
+  struct sntrup_ctx *ctx = p;
+  uint8_t session_key[SNTRUP_SESSION_KEY_SIZE];
+  sntrup761_encap (ctx->public_key, session_key, ctx->ciphertext,
+		   &ctx->lfib,(nettle_random_func *)knuth_lfib_random);
+}
+
+static void
+bench_sntrup_decrypt (void *p)
+{
+  struct sntrup_ctx *ctx = p;
+  uint8_t session_key[SNTRUP_SESSION_KEY_SIZE];
+  sntrup761_decap (ctx->secret_key, session_key, ctx->ciphertext);
+}
+
+static void
+bench_sntrup_clear (void *p)
+{
+  free (p);
+}
+
+struct ml_kem_ctx
+{
+  uint8_t public_key[ML_KEM_1024_PUBLIC_KEY_SIZE];
+  uint8_t secret_key[ML_KEM_1024_PRIVATE_KEY_SIZE];
+  uint8_t ciphertext[ML_KEM_1024_CIPHERTEXT_SIZE];
+  struct knuth_lfib_ctx lfib;
+  uint16_t *scratch;
+  void (*generate)(uint8_t *pub, uint8_t *key,
+		   const uint8_t *seed,
+		   uint16_t *scratch);
+  void (*encap)(const uint8_t *pub,
+		uint8_t *secret, uint8_t *ciphertext,
+		void *random_ctx, nettle_random_func *random,
+		uint16_t *scratch);
+  void (*decap)(const uint8_t *key,
+		uint8_t *secret,
+		const uint8_t *ciphertext,
+		uint16_t *scratch);
+};
+
+static void *
+bench_ml_kem_init (unsigned size)
+{
+  struct ml_kem_ctx *ctx;
+  uint8_t session_key[ML_KEM_SESSION_KEY_SIZE];
+  uint8_t seed[ML_KEM_SEED_SIZE];
+  size_t itch;
+
+  ctx = xalloc (sizeof (*ctx));
+  switch (size)
+    {
+    case 768:
+      ctx->generate = ml_kem_768_generate_keypair;
+      ctx->encap = ml_kem_768_encap;
+      ctx->decap = ml_kem_768_decap;
+      itch = ml_kem_768_decap_itch ();
+      break;
+    case 1024:
+      ctx->generate = ml_kem_1024_generate_keypair;
+      ctx->encap = ml_kem_1024_encap;
+      ctx->decap = ml_kem_1024_decap;
+      itch = ml_kem_1024_decap_itch ();
+      break;
+    default:
+      die ("Internal error.\n");
+    }
+  // Assumes the decap_itch is largest. */
+  ctx->scratch = xalloc (itch * sizeof(uint16_t));
+  knuth_lfib_init (&ctx->lfib, 1);
+  knuth_lfib_random (&ctx->lfib, sizeof (seed), seed);
+
+  ctx->generate (ctx->public_key, ctx->secret_key,
+		 seed, ctx->scratch);
+
+  ctx->encap (ctx->public_key,
+	      session_key, ctx->ciphertext,
+	      &ctx->lfib, (nettle_random_func *)knuth_lfib_random,
+	      ctx->scratch);
+
+  return ctx;
+}
+
+static void
+bench_ml_kem_keygen (void *p)
+{
+  struct ml_kem_ctx *ctx = p;
+  uint8_t public_key[ML_KEM_1024_PUBLIC_KEY_SIZE];
+  uint8_t secret_key[ML_KEM_1024_PRIVATE_KEY_SIZE];
+  uint8_t seed[ML_KEM_SEED_SIZE];
+
+  knuth_lfib_init (&ctx->lfib, 1);
+  knuth_lfib_random (&ctx->lfib, sizeof (seed), seed);
+
+  ctx->generate (public_key, secret_key, seed,
+		 ctx->scratch);
+}
+
+static void
+bench_ml_kem_encrypt (void *p)
+{
+  struct ml_kem_ctx *ctx = p;
+  uint8_t session_key[ML_KEM_SESSION_KEY_SIZE];
+
+  ctx->encap (ctx->public_key, session_key, ctx->ciphertext,
+	      &ctx->lfib, (nettle_random_func *)knuth_lfib_random,
+	      ctx->scratch);
+}
+
+static void
+bench_ml_kem_decrypt (void *p)
+{
+  struct ml_kem_ctx *ctx = p;
+  uint8_t session_key[ML_KEM_SESSION_KEY_SIZE];
+  ctx->decap (ctx->secret_key, session_key, ctx->ciphertext,
+	      ctx->scratch);
+}
+
+static void
+bench_ml_kem_clear (void *p)
+{
+  struct ml_kem_ctx *ctx = p;
+  free (ctx->scratch);
+  free (ctx);
+}
+
+static const struct sign_alg sign_alg_list[] = {
   { "rsa",   1024, bench_rsa_init,   bench_rsa_sign,   bench_rsa_verify,   bench_rsa_clear },
   { "rsa",   2048, bench_rsa_init,   bench_rsa_sign,   bench_rsa_verify,   bench_rsa_clear },
   { "rsa-tr",   1024, bench_rsa_init,   bench_rsa_sign_tr,   bench_rsa_verify,   bench_rsa_clear },
@@ -1001,6 +1205,11 @@ struct alg alg_list[] = {
   { "slh-dsa-sha2-f", 128, bench_slh_dsa_init_sha2_f, bench_slh_dsa_sign, bench_slh_dsa_verify, bench_slh_dsa_clear },
 };
 
+static const struct kem_alg kem_alg_list[] = {
+  { "sntrup", 761, bench_sntrup_init, bench_sntrup_keygen, bench_sntrup_encrypt, bench_sntrup_decrypt, bench_sntrup_clear },
+  { "ml_kem", 768, bench_ml_kem_init, bench_ml_kem_keygen, bench_ml_kem_encrypt, bench_ml_kem_decrypt, bench_ml_kem_clear },
+  { "ml_kem", 1024, bench_ml_kem_init, bench_ml_kem_keygen, bench_ml_kem_encrypt, bench_ml_kem_decrypt, bench_ml_kem_clear },
+};
 #define numberof(x)  (sizeof (x) / sizeof ((x)[0]))
 
 int
@@ -1016,9 +1225,16 @@ main (int argc, char **argv)
   printf ("%16s %4s %9s %9s\n",
 	  "name", "size", "sign/s", "verify/s");
 
-  for (i = 0; i < numberof(alg_list); i++)
-    if (!filter || strstr (alg_list[i].name, filter))
-      bench_alg (&alg_list[i]);
+  for (i = 0; i < numberof(sign_alg_list); i++)
+    if (!filter || strstr (sign_alg_list[i].name, filter))
+      bench_sign_alg (&sign_alg_list[i]);
+
+  printf ("%16s %4s %9s %9s %9s\n",
+	  "name", "size", "gen/s", "enc/s", "dec/s");
+
+  for (i = 0; i < numberof(kem_alg_list); i++)
+    if (!filter || strstr (kem_alg_list[i].name, filter))
+      bench_kem_alg (&kem_alg_list[i]);
 
   return EXIT_SUCCESS;
 }

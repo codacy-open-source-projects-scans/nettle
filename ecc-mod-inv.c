@@ -38,6 +38,7 @@
 #include <assert.h>
 
 #include "ecc-internal.h"
+#include "nettle-internal.h"
 
 static void
 cnd_neg (int cnd, mp_limb_t *rp, const mp_limb_t *ap, mp_size_t n)
@@ -147,7 +148,7 @@ ecc_mod_inv (const struct ecc_modulo *m,
 
       cy = mpn_rshift (ap, ap, n, 1);
       assert_maybe (cy == 0);
-      cy = mpn_rshift (up, up, n, 1);
+      cy = mpn_rshift (up, up, n, 1) >> (GMP_LIMB_BITS - 1);
       cy = mpn_cnd_add_n (cy, up, up, m->mp1h, n);
       assert_maybe (cy == 0);
     }
