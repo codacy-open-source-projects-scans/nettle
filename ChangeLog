@@ -1,4 +1,31 @@
+2026-10-15  Niels Möller  <nisse@lysator.liu.se>
+
+	From Brad Smith:
+	* fat-arm64.c (get_arm64_features): Check return value of
+	elf_aux_info, and don't assume that output is left unchanged on
+	failure.
+	* fat-ppc.c (get_ppc_features): Likewise.
+
+	* testsuite/Makefile.in (DISTFILES): Add new test vector files.
+
+2026-10-14  Niels Möller  <nisse@lysator.liu.se>
+
+	* testsuite/ml-kem-test.c (test_ml_kem_decap_seed): New function,
+	suitable for wycheproof tests.
+	(test_main): Add a couple of wycheproof test vectors, to exercise
+	implicit rejection.
+
 2026-10-07  Niels Möller  <nisse@lysator.liu.se>
+
+	* mlkemdata.c (powertable): New program, to generate tables for
+	the mlkem ntt operations.
+	* Makefile.in (SOURCES): Add mlkemdata.c
+	(DISTFILES): mlkem-tables.h.
+	(mlkem-tables.h): Add make targets to generate this file by
+	compiling and running mlkemdata.c.
+	* ml-kem-internal.c (zeta_pow_table, zeta_pow_table2): Include
+	mlkem-tables.h to define these tables, instead of defining them
+	inline.
 
 	* ml-kem-internal.c (MATRIX_GET_VECTOR, MATRIX_GET_POLY): Deleted
 	macros.
